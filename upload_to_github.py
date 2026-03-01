@@ -41,7 +41,9 @@ class GitHubUploader:
         # 每次重试间隔秒数: 避免瞬时网络抖动导致立即失败
         self.push_retry_wait_seconds = 5
         # 非快进拒绝时是否自动拉取并变基后重推
-        self.auto_rebase_on_reject = True
+        self.auto_rebase_on_reject = False
+        # 非快进拒绝时是否优先使用 force-with-lease 覆盖远程
+        self.force_push_on_non_fast_forward = True
 
         # 规范化并兜底默认值，避免空字符串导致后续命令异常
         self.repo_name = self.repo_name.strip() or Path.cwd().name
@@ -52,6 +54,7 @@ class GitHubUploader:
         self.push_retry_times = max(1, int(self.push_retry_times))
         self.push_retry_wait_seconds = max(1, int(self.push_retry_wait_seconds))
         self.auto_rebase_on_reject = bool(self.auto_rebase_on_reject)
+        self.force_push_on_non_fast_forward = bool(self.force_push_on_non_fast_forward)
 
         visibility_value = self.visibility.strip().lower()
         if visibility_value not in {"public", "private"}:
@@ -282,17 +285,32 @@ class GitHubUploader:
             network_error = self.is_network_connect_error(detail)
             non_fast_forward_error = self.is_non_fast_forward_error(detail)
 
-            if non_fast_forward_error and self.auto_rebase_on_reject:
-                print("[提示] 检测到远程分支领先，执行 pull --rebase 后重试 push...")
-                sync_result = self.run_cmd(["git", "pull", "--rebase", remote, branch], check=False)
-                if sync_result.returncode != 0:
-                    sync_detail = (sync_result.stderr or sync_result.stdout or "").strip()
+            if non_fast_forward_error:
+                if self.force_push_on_non_fast_forward:
+                    print("[提示] 检测到非快进拒绝，执行 force-with-lease 推送...")
+                    force_result = self.run_cmd(["git", "push", "--force-with-lease", "-u", remote, branch], check=False)
+                    if force_result.returncode == 0:
+                        force_output = (force_result.stdout or "").strip()
+                        if force_output:
+                            print(force_output)
+                        return
+                    force_detail = (force_result.stderr or force_result.stdout or "").strip()
                     raise RuntimeError(
-                        "自动同步远程失败，可能存在冲突，请先手动处理后再运行脚本。\n"
-                        f"同步命令: git pull --rebase {remote} {branch}\n"
-                        f"原始错误:\n{sync_detail}"
+                        "force-with-lease 推送失败，请检查远程分支状态后重试。\n"
+                        f"原始错误:\n{force_detail}"
                     )
-                continue
+
+                if self.auto_rebase_on_reject:
+                    print("[提示] 检测到远程分支领先，执行 pull --rebase 后重试 push...")
+                    sync_result = self.run_cmd(["git", "pull", "--rebase", remote, branch], check=False)
+                    if sync_result.returncode != 0:
+                        sync_detail = (sync_result.stderr or sync_result.stdout or "").strip()
+                        raise RuntimeError(
+                            "自动同步远程失败，可能存在冲突，请先手动处理后再运行脚本。\n"
+                            f"同步命令: git pull --rebase {remote} {branch}\n"
+                            f"原始错误:\n{sync_detail}"
+                        )
+                    continue
 
             if network_error and attempt < self.push_retry_times:
                 print(
