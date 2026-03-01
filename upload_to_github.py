@@ -186,6 +186,61 @@ class GitHubUploader:
             self.run_cmd(["git", "remote", "set-url", remote, https_url], check=True)
         return self.get_remote_url(remote)
 
+    def extract_github_owner_repo(self, remote_url: str) -> tuple[str, str]:
+        """
+        功能: 从 GitHub 远程地址中提取 owner/repo。
+        输入: remote_url 远程地址。
+        输出: (owner, repo)；解析失败时返回空字符串。
+        """
+        url = self.to_https_remote_url(remote_url).strip()
+        prefix = "https://github.com/"
+        if not url.startswith(prefix):
+            return "", ""
+        path = url[len(prefix):]
+        if path.endswith(".git"):
+            path = path[:-4]
+        parts = path.split("/")
+        if len(parts) < 2:
+            return "", ""
+        return parts[0], parts[1]
+
+    def build_expected_remote_url(self, current_remote_url: str) -> str:
+        """
+        功能: 根据配置与当前远程推断目标远程地址。
+        输入: current_remote_url 当前远程地址。
+        输出: 期望使用的 GitHub HTTPS 远程地址。
+        """
+        repo_name = self.repo_name.strip()
+        if "/" in repo_name:
+            owner, repo = repo_name.split("/", 1)
+            return f"https://github.com/{owner}/{repo}.git"
+
+        current_owner, _ = self.extract_github_owner_repo(current_remote_url)
+        if current_owner:
+            return f"https://github.com/{current_owner}/{repo_name}.git"
+        return ""
+
+    def align_remote_to_repo_name(self, remote: str) -> str:
+        """
+        功能: 当远程仓库名与配置不一致时，自动切换到配置仓库。
+        输入: remote 远程名。
+        输出: 对齐后的远程 URL。
+        """
+        current_url = self.ensure_remote_https(remote)
+        expected_url = self.build_expected_remote_url(current_url)
+        if expected_url and current_url != expected_url:
+            owner, repo = self.extract_github_owner_repo(expected_url)
+            if owner and repo:
+                full_name = f"{owner}/{repo}"
+                view_result = self.run_cmd(["gh", "repo", "view", full_name], check=False)
+                if view_result.returncode != 0:
+                    print(f"[步骤] 目标仓库不存在，自动创建: {full_name} ({self.visibility})")
+                    self.run_cmd(["gh", "repo", "create", full_name, f"--{self.visibility}"], capture_output=False, check=True)
+            print(f"[步骤] 远程仓库不一致，切换到配置仓库: {expected_url}")
+            self.run_cmd(["git", "remote", "set-url", remote, expected_url], check=True)
+            return self.get_remote_url(remote)
+        return current_url
+
     def create_repo_and_push(self, repo: str, visibility: str, remote: str) -> None:
         """
         功能: 创建 GitHub 仓库并推送当前目录代码。
@@ -195,7 +250,7 @@ class GitHubUploader:
         # 分两步执行，避免 gh 直接 push 时因 SSH 公钥未配置失败
         cmd = ["gh", "repo", "create", repo, f"--{visibility}", "--source", ".", "--remote", remote]
         self.run_cmd(cmd, capture_output=False, check=True)
-        self.ensure_remote_https(remote)
+        self.align_remote_to_repo_name(remote)
         self.push_to_existing_remote(remote, self.branch)
 
     def push_to_existing_remote(self, remote: str, branch: str) -> None:
@@ -247,7 +302,7 @@ class GitHubUploader:
             print("[步骤] 直接推送到现有远程")
             if not self.skip_auth:
                 self.ensure_gh_auth()
-            self.ensure_remote_https(self.remote)
+            self.align_remote_to_repo_name(self.remote)
             self.push_to_existing_remote(self.remote, self.branch)
         else:
             if not self.skip_auth:
