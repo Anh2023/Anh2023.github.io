@@ -24,7 +24,7 @@ class GitHubUploader:
         输出: 无; 参数非法时抛出异常。
         """
         # GitHub 仓库名: 支持 "owner/repo"; 为空时使用当前目录名
-        self.repo_name = "test"
+        self.repo_name = "Anh2023.github.io"
         # 推送分支名: 常用 main 或 master
         self.branch = "main"
         # 提交信息: git commit -m 的内容
