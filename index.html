@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anh2023 | 主页</title>
+  <meta name="description" content="Anh2023 的 GitHub Pages 静态主页" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-1: #f3ece0;
+      --bg-2: #dbe7dd;
+      --ink: #1f2a36;
+      --ink-soft: #4a5563;
+      --accent: #cf5b2f;
+      --accent-2: #0f766e;
+      --card: rgba(255, 255, 255, 0.8);
+      --line: rgba(31, 42, 54, 0.12);
+      --shadow: 0 24px 48px rgba(20, 31, 41, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 18%, rgba(207, 91, 47, 0.22), transparent 36%),
+        radial-gradient(circle at 88% 12%, rgba(15, 118, 110, 0.23), transparent 32%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+      font-family: "Noto Serif SC", serif;
+      line-height: 1.6;
+    }
+
+    .wrap {
+      width: min(980px, 92vw);
+      margin: 0 auto;
+      padding: 56px 0 72px;
+      animation: fade-up 700ms ease-out;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      padding: 32px;
+      background: var(--card);
+      backdrop-filter: blur(4px);
+      box-shadow: var(--shadow);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(15, 118, 110, 0.12);
+      color: var(--accent-2);
+      font-size: 13px;
+      letter-spacing: 0.03em;
+      margin-bottom: 14px;
+      border: 1px solid rgba(15, 118, 110, 0.22);
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      font-family: "ZCOOL XiaoWei", serif;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: clamp(16px, 2.5vw, 20px);
+      max-width: 38em;
+    }
+
+    .cta {
+      margin-top: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .btn {
+      text-decoration: none;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 15px;
+      background: #fff;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(31, 42, 54, 0.12);
+      border-color: rgba(31, 42, 54, 0.3);
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .grid {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .card h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 15px;
+    }
+
+    .foot {
+      margin-top: 20px;
+      color: var(--ink-soft);
+      font-size: 14px;
+    }
+
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 760px) {
+      .wrap { padding-top: 32px; }
+      .hero { padding: 22px; border-radius: 20px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <span class="badge">GitHub Pages · 静态站点</span>
+      <h1>Anh2023</h1>
+      <p class="sub">这是你的个人主页入口。现在页面已由 <code>index.html</code> 提供，不再显示 README 内容。</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/Anh2023/Anh2023.github.io" target="_blank" rel="noopener noreferrer">查看仓库</a>
+        <a class="btn" href="https://github.com/Anh2023/Anh2023.github.io/tree/main/rust_simple_web" target="_blank" rel="noopener noreferrer">Rust 项目目录</a>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <h2>为什么之前显示 README</h2>
+          <p>因为仓库根目录没有首页文件。GitHub Pages 会回退渲染 README。</p>
+        </article>
+        <article class="card">
+          <h2>现在如何生效</h2>
+          <p>把本文件提交到 <code>main</code> 后，等待 1-5 分钟即可在域名看到新页面。</p>
+        </article>
+      </div>
+
+      <p class="foot">© <span id="year"></span> Anh2023 · Build with static HTML</p>
+    </section>
+  </main>
+  <script>
+    document.getElementById("year").textContent = String(new Date().getFullYear());
+  </script>
+</body>
+</html>
