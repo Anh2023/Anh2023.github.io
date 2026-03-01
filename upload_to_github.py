@@ -40,6 +40,8 @@ class GitHubUploader:
         self.push_retry_times = 3
         # 每次重试间隔秒数: 避免瞬时网络抖动导致立即失败
         self.push_retry_wait_seconds = 5
+        # 非快进拒绝时是否自动拉取并变基后重推
+        self.auto_rebase_on_reject = True
 
         # 规范化并兜底默认值，避免空字符串导致后续命令异常
         self.repo_name = self.repo_name.strip() or Path.cwd().name
@@ -49,6 +51,7 @@ class GitHubUploader:
         self.skip_auth = bool(self.skip_auth)
         self.push_retry_times = max(1, int(self.push_retry_times))
         self.push_retry_wait_seconds = max(1, int(self.push_retry_wait_seconds))
+        self.auto_rebase_on_reject = bool(self.auto_rebase_on_reject)
 
         visibility_value = self.visibility.strip().lower()
         if visibility_value not in {"public", "private"}:
@@ -277,6 +280,20 @@ class GitHubUploader:
 
             detail = (result.stderr or result.stdout or "").strip()
             network_error = self.is_network_connect_error(detail)
+            non_fast_forward_error = self.is_non_fast_forward_error(detail)
+
+            if non_fast_forward_error and self.auto_rebase_on_reject:
+                print("[提示] 检测到远程分支领先，执行 pull --rebase 后重试 push...")
+                sync_result = self.run_cmd(["git", "pull", "--rebase", remote, branch], check=False)
+                if sync_result.returncode != 0:
+                    sync_detail = (sync_result.stderr or sync_result.stdout or "").strip()
+                    raise RuntimeError(
+                        "自动同步远程失败，可能存在冲突，请先手动处理后再运行脚本。\n"
+                        f"同步命令: git pull --rebase {remote} {branch}\n"
+                        f"原始错误:\n{sync_detail}"
+                    )
+                continue
+
             if network_error and attempt < self.push_retry_times:
                 print(
                     f"[提示] git push 网络异常，第 {attempt}/{self.push_retry_times} 次失败，"
@@ -308,6 +325,21 @@ class GitHubUploader:
             "connection reset",
             "network is unreachable",
             "name or service not known",
+        ]
+        return any(word in text for word in keywords)
+
+    def is_non_fast_forward_error(self, detail: str) -> bool:
+        """
+        功能: 判断错误信息是否属于非快进推送拒绝。
+        输入: detail 命令错误输出文本。
+        输出: True 表示远程领先导致 push 被拒绝; False 表示其他错误。
+        """
+        text = detail.lower()
+        keywords = [
+            "fetch first",
+            "failed to push some refs",
+            "updates were rejected",
+            "non-fast-forward",
         ]
         return any(word in text for word in keywords)
 
