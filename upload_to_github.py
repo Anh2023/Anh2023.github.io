@@ -341,6 +341,8 @@ class GitHubUploader:
             "could not resolve host",
             "connection timed out",
             "connection reset",
+            "connection was reset",
+            "recv failure",
             "network is unreachable",
             "name or service not known",
         ]
