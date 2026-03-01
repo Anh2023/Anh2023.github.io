@@ -149,10 +149,42 @@ class GitHubUploader:
         输出: 无; 登录失败时抛出异常。
         """
         status = self.run_cmd(["gh", "auth", "status"], check=False)
-        if status.returncode == 0:
-            return
-        print("[提示] 检测到 gh 未登录，开始执行登录流程...")
-        self.run_cmd(["gh", "auth", "login", "--git-protocol", "https", "--web"], capture_output=False, check=True)
+        if status.returncode != 0:
+            print("[提示] 检测到 gh 未登录，开始执行登录流程...")
+            self.run_cmd(["gh", "auth", "login", "--git-protocol", "https", "--web"], capture_output=False, check=True)
+
+        # 强制 gh 使用 https 协议，避免生成 git@github.com 的 SSH 远程地址
+        self.run_cmd(["gh", "config", "set", "git_protocol", "https"], check=False)
+        # 配置 git 通过 gh 管理认证，避免 push 时反复认证失败
+        self.run_cmd(["gh", "auth", "setup-git"], check=False)
+
+    def to_https_remote_url(self, remote_url: str) -> str:
+        """
+        功能: 将 GitHub SSH 远程地址转换为 HTTPS 地址。
+        输入: remote_url 当前远程 URL。
+        输出: 转换后的 URL; 非 GitHub SSH 地址则原样返回。
+        """
+        url = remote_url.strip()
+        if url.startswith("git@github.com:"):
+            return f"https://github.com/{url[len('git@github.com:'):]}"
+        if url.startswith("ssh://git@github.com/"):
+            return f"https://github.com/{url[len('ssh://git@github.com/'):]}"
+        return url
+
+    def ensure_remote_https(self, remote: str) -> str:
+        """
+        功能: 确保远程地址为 GitHub HTTPS 协议。
+        输入: remote 远程名。
+        输出: 最终远程 URL。
+        """
+        current_url = self.get_remote_url(remote)
+        if not current_url:
+            return ""
+        https_url = self.to_https_remote_url(current_url)
+        if https_url != current_url:
+            print(f"[步骤] 远程地址从 SSH 切换为 HTTPS: {https_url}")
+            self.run_cmd(["git", "remote", "set-url", remote, https_url], check=True)
+        return self.get_remote_url(remote)
 
     def create_repo_and_push(self, repo: str, visibility: str, remote: str) -> None:
         """
@@ -160,8 +192,11 @@ class GitHubUploader:
         输入: repo 仓库名(可含 owner/repo); visibility 为 public/private; remote 远程名。
         输出: 无; 失败时抛出异常。
         """
-        cmd = ["gh", "repo", "create", repo, f"--{visibility}", "--source", ".", "--remote", remote, "--push"]
+        # 分两步执行，避免 gh 直接 push 时因 SSH 公钥未配置失败
+        cmd = ["gh", "repo", "create", repo, f"--{visibility}", "--source", ".", "--remote", remote]
         self.run_cmd(cmd, capture_output=False, check=True)
+        self.ensure_remote_https(remote)
+        self.push_to_existing_remote(remote, self.branch)
 
     def push_to_existing_remote(self, remote: str, branch: str) -> None:
         """
@@ -210,6 +245,9 @@ class GitHubUploader:
         if remote_url:
             print(f"[步骤] 检测到远程 {self.remote}: {remote_url}")
             print("[步骤] 直接推送到现有远程")
+            if not self.skip_auth:
+                self.ensure_gh_auth()
+            self.ensure_remote_https(self.remote)
             self.push_to_existing_remote(self.remote, self.branch)
         else:
             if not self.skip_auth:
