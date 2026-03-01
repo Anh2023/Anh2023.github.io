@@ -5,6 +5,7 @@
 """
 
 import shutil
+import time
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,10 @@ class GitHubUploader:
         self.visibility = "private"
         # 是否跳过 gh 登录检查: True 跳过, False 自动检查并引导登录
         self.skip_auth = False
+        # 推送重试次数: 网络异常时最多重试 N 次
+        self.push_retry_times = 3
+        # 每次重试间隔秒数: 避免瞬时网络抖动导致立即失败
+        self.push_retry_wait_seconds = 5
 
         # 规范化并兜底默认值，避免空字符串导致后续命令异常
         self.repo_name = self.repo_name.strip() or Path.cwd().name
@@ -42,6 +47,8 @@ class GitHubUploader:
         self.remote = self.remote.strip() or "origin"
         self.commit_message = self.commit_message.strip() or "init: first commit"
         self.skip_auth = bool(self.skip_auth)
+        self.push_retry_times = max(1, int(self.push_retry_times))
+        self.push_retry_wait_seconds = max(1, int(self.push_retry_wait_seconds))
 
         visibility_value = self.visibility.strip().lower()
         if visibility_value not in {"public", "private"}:
@@ -259,7 +266,50 @@ class GitHubUploader:
         输入: remote 远程名; branch 分支名。
         输出: 无; 推送失败时抛出异常。
         """
-        self.run_cmd(["git", "push", "-u", remote, branch], capture_output=False, check=True)
+        cmd = ["git", "push", "-u", remote, branch]
+        for attempt in range(1, self.push_retry_times + 1):
+            result = self.run_cmd(cmd, check=False)
+            if result.returncode == 0:
+                output = (result.stdout or "").strip()
+                if output:
+                    print(output)
+                return
+
+            detail = (result.stderr or result.stdout or "").strip()
+            network_error = self.is_network_connect_error(detail)
+            if network_error and attempt < self.push_retry_times:
+                print(
+                    f"[提示] git push 网络异常，第 {attempt}/{self.push_retry_times} 次失败，"
+                    f"{self.push_retry_wait_seconds}s 后重试..."
+                )
+                time.sleep(self.push_retry_wait_seconds)
+                continue
+
+            if network_error:
+                raise RuntimeError(
+                    "git push 失败: 当前网络无法连通 github.com:443。\n"
+                    "请先检查网络/代理后重试。\n"
+                    "可执行: Test-NetConnection github.com -Port 443\n"
+                    f"原始错误:\n{detail}"
+                )
+            raise RuntimeError(f"命令执行失败: {' '.join(cmd)}\n{detail}")
+
+    def is_network_connect_error(self, detail: str) -> bool:
+        """
+        功能: 判断错误信息是否属于 GitHub 网络连通类故障。
+        输入: detail 命令错误输出文本。
+        输出: True 表示网络连接问题; False 表示其他类型问题。
+        """
+        text = detail.lower()
+        keywords = [
+            "failed to connect to github.com port 443",
+            "could not resolve host",
+            "connection timed out",
+            "connection reset",
+            "network is unreachable",
+            "name or service not known",
+        ]
+        return any(word in text for word in keywords)
 
     def upload(self) -> None:
         """
